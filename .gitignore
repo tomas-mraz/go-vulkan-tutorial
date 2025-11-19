@@ -1,0 +1,7 @@
+# Binaries for programs and plugins
+.idea
+*.exe
+*.dll
+*.so
+*.h
+*.dylib

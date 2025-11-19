@@ -10,8 +10,8 @@ import (
 
 var (
 	window         *glfw.Window
-	instance       *vk.Instance
-	physicalDevice *vk.PhysicalDevice
+	instance       vk.Instance
+	physicalDevice vk.PhysicalDevice
 )
 
 const (
@@ -34,24 +34,33 @@ func initWindow() {
 	var err error
 	err = glfw.Init()
 	if err != nil {
-		panic("failed GLFW initialization")
+		panic(err)
 	}
+
+	vk.SetGetInstanceProcAddr(glfw.GetVulkanGetInstanceProcAddress())
+	err = vk.Init()
+	if err != nil {
+		panic(err)
+	}
+
 	glfw.WindowHint(glfw.ClientAPI, glfw.NoAPI)
 	glfw.WindowHint(glfw.Resizable, glfw.False)
 	window, err = glfw.CreateWindow(WIDTH, HEIGHT, "VulkanApp", nil, nil)
 	if err != nil {
 		panic("failed to create window")
 	}
+	fmt.Println("initWindow OK")
 }
 
 func initVulkan() {
 	createInstance()
 	setupDebugMessenger()
 	pickPhysicalDevice()
+	fmt.Println("initVulkan OK")
 }
 
 func pickPhysicalDevice() {
-	deviceCount := uint32(0)
+	var deviceCount uint32
 	result := vk.EnumeratePhysicalDevices(instance, &deviceCount, nil)
 	if result != vk.Success {
 		panic("failed to enumerate physical devices")
@@ -75,15 +84,19 @@ func pickPhysicalDevice() {
 	if physicalDevice == nil {
 		panic("failed to find a suitable GPU")
 	}
-	fmt.Println("Using device:", physicalDevice.Properties.DeviceName)
+	var deviceProperties vk.PhysicalDeviceProperties
+	vk.GetPhysicalDeviceProperties(physicalDevice, &deviceProperties)
+	deviceProperties.Deref()
+	fmt.Println("Using device:", GetCString(deviceProperties.DeviceName[:]))
 }
 
 func isDeviceSuitable(device vk.PhysicalDevice) bool {
-	//return true
 	var deviceProperties vk.PhysicalDeviceProperties
 	var deviceFeatures vk.PhysicalDeviceFeatures
 	vk.GetPhysicalDeviceProperties(device, &deviceProperties)
 	vk.GetPhysicalDeviceFeatures(device, &deviceFeatures)
+	deviceProperties.Deref()
+	deviceFeatures.Deref()
 
 	return deviceProperties.DeviceType == vk.PhysicalDeviceTypeIntegratedGpu && deviceFeatures.GeometryShader != 0
 }
@@ -93,22 +106,23 @@ func setupDebugMessenger() {
 }
 
 func createInstance() {
-	var appInfo vk.ApplicationInfo
-	appInfo.SType = vk.StructureTypeApplicationInfo
-	appInfo.PApplicationName = "Hello triangle"
-	appInfo.ApplicationVersion = vk.MakeVersion(1, 0, 0)
-	appInfo.PEngineName = "No Engine"
-	appInfo.EngineVersion = vk.MakeVersion(1, 0, 0)
-	appInfo.ApiVersion = vk.ApiVersion10
-
-	var createInfo vk.InstanceCreateInfo
-	createInfo.SType = vk.StructureTypeInstanceCreateInfo
-	createInfo.PApplicationInfo = &appInfo
+	appInfo := vk.ApplicationInfo{
+		SType:              vk.StructureTypeApplicationInfo,
+		PApplicationName:   "Hello triangle",
+		ApplicationVersion: vk.MakeVersion(1, 0, 0),
+		PEngineName:        "No Engine",
+		EngineVersion:      vk.MakeVersion(1, 0, 0),
+		ApiVersion:         vk.ApiVersion10,
+	}
 
 	extensions := window.GetRequiredInstanceExtensions()
-	createInfo.EnabledExtensionCount = uint32(len(extensions))
-	createInfo.PpEnabledExtensionNames = extensions
-	createInfo.EnabledLayerCount = 0
+	createInfo := vk.InstanceCreateInfo{
+		SType:                   vk.StructureTypeInstanceCreateInfo,
+		PApplicationInfo:        &appInfo,
+		EnabledExtensionCount:   uint32(len(extensions)),
+		PpEnabledExtensionNames: extensions,
+		EnabledLayerCount:       0,
+	}
 
 	result := vk.CreateInstance(&createInfo, nil, &instance)
 	if result != vk.Success {
